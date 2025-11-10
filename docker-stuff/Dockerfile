@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN apk del gcc musl-dev python3-dev
 
 # Copy application files
-COPY alertpusher.py .
+COPY xmpp-boom.py .
 COPY xmpp_muc.py .
 
 # Create directories for logs and certs
