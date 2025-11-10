@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  alertpusher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alertpusher
+    restart: unless-stopped
+
+    # Port mapping (adjust as needed)
+    ports:
+      - "8080:8080"
+
+    # Mount config and persistent directories
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./logs:/app/logs
+      - ./certs:/app/certs:ro  # Optional: for SSL certificates
+
+    # Environment variables (optional overrides)
+    # environment:
+    #   - XMPP_JID=librenms-bot@xmpp.example.com
+    #   - XMPP_PASSWORD=your-password
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Resource limits (optional)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '0.5'
+    #       memory: 256M
+    #     reservations:
+    #       cpus: '0.1'
+    #       memory: 128M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # Network mode (optional)
+    # network_mode: bridge
+
+    # User (runs as non-root by default from Dockerfile)
+    # user: "1000:1000"
+
+# Optional: Custom network
+# networks:
+#   alertpusher_net:
+#     driver: bridge

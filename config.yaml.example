@@ -1,0 +1,90 @@
+# AlertPusher Configuration
+# Copy this to config.yaml and adjust for your environment
+
+# XMPP Configuration
+xmpp:
+  # Bot JID (username@domain)
+  jid: "librenms-bot@xmpp.example.com"
+
+  # Bot password
+  password: "your-secure-password-here"
+
+  # XMPP server (optional, auto-discovered from JID if not specified)
+  server: "xmpp.example.com"
+
+  # XMPP server port (default: 5222)
+  port: 5222
+
+  # Maximum reconnect delay in seconds (default: 300)
+  reconnect_max_delay: 300
+
+  # Keepalive ping interval in seconds (default: 60)
+  keepalive_interval: 60
+
+  # MUC rooms to join
+  rooms:
+    - jid: "alerts@conference.xmpp.example.com"
+      nick: "LibreNMS-Bot"
+      # Password options (choose one):
+      # password: "room-password"     # If room is password protected
+      # password: ""                  # Empty string for no password
+      # password: null                # null/none for no password
+      # password: noauth              # or use 'noauth' keyword
+      # Or simply omit the password field entirely
+
+    - jid: "critical-alerts@conference.xmpp.example.com"
+      nick: "LibreNMS-Critical"
+      password: null
+
+    - jid: "monitoring@conference.xmpp.example.com"
+      nick: "MonBot"
+      # No password field = no password required
+
+# HTTP Server Configuration
+http:
+  # Bind IP address (0.0.0.0 for all interfaces)
+  bind: "0.0.0.0"
+
+  # HTTP/HTTPS port
+  port: 8080
+
+  # Authentication tokens (list of valid tokens)
+  auth_tokens:
+    - "your-secret-token-1"
+    - "another-secret-token-2"
+    - "librenms-webhook-token"
+
+  # SSL/TLS Configuration
+  ssl:
+    # Enable HTTPS
+    enabled: false
+
+    # Option 1: Single PEM file (cert + key + optional CA chain)
+    pem: "/app/certs/server.pem"
+
+    # Option 2: Separate files
+    # cert: "/app/certs/server.crt"
+    # key: "/app/certs/server.key"
+    # ca: "/app/certs/ca.crt"  # Optional CA certificate
+
+# Logging Configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+
+  # Console logging (stdout/stderr)
+  console:
+    enabled: true
+
+  # File logging
+  file:
+    enabled: true
+    path: "logs/alertpusher.log"
+
+  # Syslog logging
+  syslog:
+    enabled: false
+    # For local syslog:
+    address: "/dev/log"
+    # For remote syslog (TCP):
+    # address: "syslog.example.com:514"

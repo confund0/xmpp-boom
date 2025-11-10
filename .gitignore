@@ -1,0 +1,41 @@
+# Config
+config.yaml
+
+# Logs
+logs/
+*.log
+
+# Certificates
+certs/
+*.pem
+*.crt
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+#Blah Blah
+*.md
+*.txt
