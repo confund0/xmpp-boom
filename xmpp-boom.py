@@ -241,6 +241,13 @@ class AlertPusher:
             subject = params.get('subject', '')
             message = params.get('message', '')
 
+            # Decode escape sequences (e.g., "\n" -> newline)
+            # This allows newlines and other escapes to work in form data
+            if message:
+                message = message.encode().decode('unicode_escape')
+            if subject:
+                subject = subject.encode().decode('unicode_escape')
+
             if not to or not message:
                 return web.json_response({'error': 'Missing required fields: to, message'}, status=400)
 
