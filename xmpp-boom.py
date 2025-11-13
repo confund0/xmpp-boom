@@ -273,7 +273,7 @@ class AlertPusher:
     def _format_message(self, subject: str, message: str) -> str:
         """Format alert message."""
         if subject:
-            return f"**{subject}**\n\n{message}"
+            return f"{subject}\n\n{message}"
         return message
 
     async def run(self):
