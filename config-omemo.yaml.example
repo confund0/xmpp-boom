@@ -1,0 +1,162 @@
+# AlertPusher Configuration (OMEMO Edition)
+# Copy this to config.yaml and adjust for your environment
+
+# XMPP Configuration
+xmpp:
+  # Bot JID (username@domain)
+  jid: "librenms-bot@xmpp.example.com"
+
+  # Bot password
+  password: "your-secure-password-here"
+
+  # XMPP server (optional, auto-discovered from JID if not specified)
+  server: "xmpp.example.com"
+
+  # XMPP server port (default: 5222)
+  port: 5222
+
+  # Maximum reconnect delay in seconds (default: 300)
+  reconnect_max_delay: 300
+
+  # Keepalive ping interval in seconds (default: 60)
+  keepalive_interval: 60
+
+  # OMEMO Encryption Configuration
+  omemo:
+    # Enable OMEMO encryption support
+    enabled: true
+
+    # OMEMO key storage path (default: ~/.xmpp-omemo-{jid}.json)
+    # This file stores encryption keys, device IDs, and trust information
+    # IMPORTANT: Keep this file secure and backed up!
+    storage_path: "/app/data/omemo-keys.json"
+
+  # MUC rooms to join
+  rooms:
+    - jid: "alerts@conference.xmpp.example.com"
+      nick: "LibreNMS-Bot"
+      # Password options (choose one):
+      # password: "room-password"     # If room is password protected
+      # password: ""                  # Empty string for no password
+      # password: null                # null/none for no password
+      # password: noauth              # or use 'noauth' keyword
+      # Or simply omit the password field entirely
+
+    - jid: "critical-alerts@conference.xmpp.example.com"
+      nick: "LibreNMS-Critical"
+      password: null
+
+    - jid: "monitoring@conference.xmpp.example.com"
+      nick: "MonBot"
+      # No password field = no password required
+
+# HTTP Server Configuration
+http:
+  # Bind IP address (0.0.0.0 for all interfaces)
+  bind: "0.0.0.0"
+
+  # HTTP/HTTPS port
+  port: 8080
+
+  # Authentication tokens (list of valid tokens)
+  auth_tokens:
+    - "your-secret-token-1"
+    - "another-secret-token-2"
+    - "librenms-webhook-token"
+
+  # SSL/TLS Configuration
+  ssl:
+    # Enable HTTPS
+    enabled: false
+
+    # Option 1: Single PEM file (cert + key + optional CA chain)
+    pem: "/app/certs/server.pem"
+
+    # Option 2: Separate files
+    # cert: "/app/certs/server.crt"
+    # key: "/app/certs/server.key"
+    # ca: "/app/certs/ca.crt"  # Optional CA certificate
+
+# Logging Configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+
+  # Console logging (stdout/stderr)
+  console:
+    enabled: true
+
+  # File logging
+  file:
+    enabled: true
+    path: "logs/alertpusher.log"
+
+  # Syslog logging
+  syslog:
+    enabled: false
+    # For local syslog:
+    address: "/dev/log"
+    # For remote syslog (TCP):
+    # address: "syslog.example.com:514"
+
+
+# =============================================
+# OMEMO USAGE NOTES
+# =============================================
+#
+# To send encrypted messages via the webhook API, add the 'encrypt' parameter:
+#
+# Example 1: Send encrypted message to MUC (GET request):
+#   curl "http://localhost:8080/send?token=your-secret-token-1&to=alerts@conference.xmpp.example.com&subject=Alert&message=Server%20down&encrypt=true"
+#
+# Example 2: Send encrypted message to MUC (POST JSON):
+#   curl -X POST http://localhost:8080/send \
+#     -H "Content-Type: application/json" \
+#     -d '{
+#       "token": "your-secret-token-1",
+#       "to": "alerts@conference.xmpp.example.com",
+#       "subject": "Alert",
+#       "message": "Server down",
+#       "encrypt": true
+#     }'
+#
+# Example 3: Send encrypted private message:
+#   curl -X POST http://localhost:8080/send \
+#     -H "Content-Type: application/json" \
+#     -d '{
+#       "token": "your-secret-token-1",
+#       "to": "admin@xmpp.example.com",
+#       "message": "Critical system event",
+#       "encrypt": true
+#     }'
+#
+# The 'encrypt' parameter can be:
+#   - true, 1, yes (case insensitive) = Send encrypted
+#   - false, 0, no, or omitted = Send unencrypted (default)
+#
+# OMEMO Trust Model:
+#   - Uses "Blind Trust Before Verification" (BTBV)
+#   - New devices are automatically trusted on first contact
+#   - Trust information is stored in the OMEMO storage file
+#   - Compatible with Conversations, Dino, Gajim, and other OMEMO clients
+#
+# OMEMO Version Support:
+#   - Supports legacy OMEMO 0.3.0 (eu.siacs.conversations.axolotl namespace)
+#   - Supports modern OMEMO 0.8.0+ (urn:xmpp:omemo:2 namespace)
+#   - Automatic version negotiation - sends the best version each recipient supports
+#   - Fully compatible with Conversations and other mainstream XMPP clients
+#
+# MUC Encryption:
+#   - When encrypting MUC messages, a copy is encrypted for each participant
+#   - All participants must be in a non-anonymous MUC (real JIDs visible)
+#   - Semi-anonymous MUCs are not supported for encryption
+#
+# First Run:
+#   - On first startup, OMEMO keys will be generated automatically
+#   - Key generation may take a few seconds
+#   - The bot's device will be published to the XMPP server
+#   - Other OMEMO clients will see the bot's device and can encrypt to it
+#
+# Health Check:
+#   - Use GET /health to check OMEMO status
+#   - Response includes: omemo_enabled, omemo_ready
