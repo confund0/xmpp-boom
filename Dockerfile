@@ -1,45 +1,56 @@
-FROM python:3.11-alpine
+# Builder stage
+FROM python:3.11-slim AS builder
 
-# Install build dependencies for slixmpp (needs libxml2)
-RUN apk add --no-cache \
-    libxml2-dev \
-    libxslt-dev \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    musl-dev \
-    python3-dev \
-    && pip install --no-cache-dir --upgrade pip
+    libxml2-dev \
+    libxslt1-dev \
+    libxeddsa-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
 WORKDIR /app
 
-# Copy requirements first for better caching
+# Create virtual environment
+RUN python -m venv /app/venv
+
+# Upgrade pip
+RUN /app/venv/bin/pip install --no-cache-dir --upgrade pip
+
+# Copy requirements and install dependencies
 COPY requirements.txt .
+RUN /app/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Final stage - minimal runtime image
+FROM python:3.11-slim
 
-# Remove build dependencies to keep image small
-RUN apk del gcc musl-dev python3-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libxeddsa2t64 \
+    libxml2 \
+    libxslt1.1 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy application files
-COPY xmpp-boom.py .
-COPY xmpp_muc.py .
+WORKDIR /app
 
-# Create directories for logs and certs
-RUN mkdir -p /app/logs /app/certs
+# Copy virtual environment from builder
+COPY --from=builder /app/venv /app/venv
 
-# Run as non-root user
-RUN adduser -D -u 1000 alertpusher && \
+# Copy application files and certs directory (recursive)
+COPY xmpp-boom.py xmpp_muc.py xmpp-boom-omemo.py xmpp_muc_omemo.py config.yaml ./
+#COPY certs* ./
+
+# Create directories and user
+RUN mkdir -p /app/logs && \
+    adduser --disabled-password --uid 1000 --gecos "" alertpusher && \
     chown -R alertpusher:alertpusher /app
 
 USER alertpusher
 
 # Expose HTTP port (default 8080, configurable via config.yaml)
-EXPOSE 8080
+EXPOSE 8111
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+# Health check !!! DISABLE FROM SWARM !!!
+# HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+#     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-# Run the application
-CMD ["python", "-u", "alertpusher.py", "-c", "/app/config.yaml"]
+# Run the application with virtual environment
+CMD ["/app/venv/bin/python", "-u", "xmpp-boom-omemo.py", "-c", "/app/config.yaml"]
