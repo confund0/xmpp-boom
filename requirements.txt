@@ -1,5 +1,4 @@
 slixmpp>=1.8.5
 slixmpp-omemo>=0.9.0
-python-omemo>=1.0.0
 aiohttp>=3.9.0
 PyYAML>=6.0
