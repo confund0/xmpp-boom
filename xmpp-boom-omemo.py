@@ -12,6 +12,7 @@ import logging
 import signal
 import sys
 import ssl
+import tempfile
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -229,15 +230,47 @@ class AlertPusherOMEMO:
         return web.json_response(status)
 
     async def _handle_send(self, request: web.Request) -> web.Response:
-        """Handle alert webhook with optional OMEMO encryption."""
+        """Handle alert webhook with optional OMEMO encryption and file attachments."""
+        temp_file_path = None
         try:
             # Extract parameters based on request type
+            has_file = False
+            file_field = None
+            file_name = None
+            content_type = None
+
             if request.method == 'GET':
                 params = dict(request.query)
-            elif request.content_type == 'application/json':
+            elif request.content_type and request.content_type.startswith('application/json'):
                 params = await request.json()
+            elif request.content_type and 'multipart' in request.content_type:
+                # Handle multipart/form-data (for file uploads)
+                reader = await request.multipart()
+                params = {}
+
+                async for field in reader:
+                    if field.filename:
+                        # This is a file field
+                        has_file = True
+                        file_name = field.filename
+                        content_type = field.headers.get('Content-Type', 'application/octet-stream')
+
+                        # Save to temporary file
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file_name}") as tmp:
+                            temp_file_path = tmp.name
+                            while True:
+                                chunk = await field.read_chunk()
+                                if not chunk:
+                                    break
+                                tmp.write(chunk)
+
+                        self.logger.info(f"Received file upload: {file_name} -> {temp_file_path}")
+                    else:
+                        # Regular form field
+                        value = await field.read(decode=True)
+                        params[field.name] = value.decode('utf-8')
             else:
-                # Form data or multipart
+                # Regular form data
                 params = dict(await request.post())
 
             # Validate token
@@ -260,15 +293,22 @@ class AlertPusherOMEMO:
             # Decode escape sequences (e.g., "\n" -> newline)
             # This allows newlines and other escapes to work in form data
             if message:
-                message = message.encode().decode('unicode_escape')
+                try:
+                    message = message.encode().decode('unicode_escape')
+                except Exception:
+                    pass  # Keep original if decode fails
             if subject:
-                subject = subject.encode().decode('unicode_escape')
+                try:
+                    subject = subject.encode().decode('unicode_escape')
+                except Exception:
+                    pass
 
-            if not to or not message:
-                return web.json_response({'error': 'Missing required fields: to, message'}, status=400)
+            # Validation: need either message or file
+            if not to:
+                return web.json_response({'error': 'Missing required field: to'}, status=400)
 
-            # Format message
-            full_message = self._format_message(subject, message)
+            if not message and not has_file:
+                return web.json_response({'error': 'Missing message or file attachment'}, status=400)
 
             # Send to XMPP
             if not self.xmpp_client or not self.xmpp_client.is_connected():
@@ -287,23 +327,57 @@ class AlertPusherOMEMO:
             is_muc = '@conference.' in to or '@muc.' in to or to in self.xmpp_client.rooms
 
             try:
-                if is_muc:
-                    if encrypt:
-                        await self.xmpp_client.send_encrypted_to_muc(to, full_message)
-                    else:
-                        await self.xmpp_client.send_to_muc(to, full_message)
-                else:
-                    if encrypt:
-                        await self.xmpp_client.send_encrypted_private_message(to, full_message)
-                    else:
-                        await self.xmpp_client.send_private_message(to, full_message)
+                # Handle file attachment
+                if has_file:
+                    caption = self._format_message(subject, message) if message else None
 
-                result = {
-                    'status': 'sent',
-                    'to': to,
-                    'encrypted': encrypt
-                }
-                self.logger.info(f"Alert sent to {to} (encrypted: {encrypt})")
+                    if is_muc:
+                        if encrypt:
+                            await self.xmpp_client.send_encrypted_attachment_to_muc(
+                                to, temp_file_path, caption, content_type
+                            )
+                        else:
+                            await self.xmpp_client.send_attachment_to_muc(
+                                to, temp_file_path, caption, content_type
+                            )
+                    else:
+                        if encrypt:
+                            await self.xmpp_client.send_encrypted_attachment_to_user(
+                                to, temp_file_path, caption, content_type
+                            )
+                        else:
+                            await self.xmpp_client.send_attachment_to_user(
+                                to, temp_file_path, caption, content_type
+                            )
+
+                    result = {
+                        'status': 'sent',
+                        'to': to,
+                        'encrypted': encrypt,
+                        'attachment': file_name
+                    }
+                else:
+                    # Regular text message
+                    full_message = self._format_message(subject, message)
+
+                    if is_muc:
+                        if encrypt:
+                            await self.xmpp_client.send_encrypted_to_muc(to, full_message)
+                        else:
+                            await self.xmpp_client.send_to_muc(to, full_message)
+                    else:
+                        if encrypt:
+                            await self.xmpp_client.send_encrypted_private_message(to, full_message)
+                        else:
+                            await self.xmpp_client.send_private_message(to, full_message)
+
+                    result = {
+                        'status': 'sent',
+                        'to': to,
+                        'encrypted': encrypt
+                    }
+
+                self.logger.info(f"Message sent to {to} (encrypted: {encrypt}, file: {has_file})")
                 return web.json_response(result)
 
             except Exception as e:
@@ -313,6 +387,15 @@ class AlertPusherOMEMO:
         except Exception as e:
             self.logger.exception(f"Error handling webhook: {e}")
             return web.json_response({'error': str(e)}, status=500)
+
+        finally:
+            # Clean up temporary file
+            if temp_file_path:
+                try:
+                    Path(temp_file_path).unlink()
+                    self.logger.debug(f"Cleaned up temp file: {temp_file_path}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to clean up temp file {temp_file_path}: {e}")
 
     def _validate_token(self, token: str) -> bool:
         """Validate authentication token."""
